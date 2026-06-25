@@ -1,7 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { createSermon } from '@/lib/actions/sermon-actions'
+import { updateSermon, deleteSermon } from '@/lib/actions/sermon-actions'
+import { useRouter } from 'next/navigation'
+import { Sermon } from '@/lib/actions/sermon-queries'
 
 interface NewsItem {
   id: string
@@ -16,15 +18,33 @@ interface WorshipItem {
   content: string
 }
 
-export function SermonForm() {
-  const [date, setDate] = useState('')
-  const [worshipItems, setWorshipItems] = useState<WorshipItem[]>([])
-  const [newsItems, setNewsItems] = useState<NewsItem[]>([])
-  const [sermonTitle, setSermonTitle] = useState('')
-  const [sermonScripture, setSermonScripture] = useState('')
-  const [sermonPreacher, setSermonPreacher] = useState('')
+export function EditSermonForm({ sermon }: { sermon: Sermon }) {
+  const router = useRouter()
+  const [date, setDate] = useState(sermon.date)
+  const [worshipItems, setWorshipItems] = useState<WorshipItem[]>(() => {
+    try {
+      return sermon.worship_order ? JSON.parse(sermon.worship_order) : []
+    } catch {
+      return []
+    }
+  })
+  const [newsItems, setNewsItems] = useState<NewsItem[]>(() => {
+    try {
+      return sermon.youth_news ? JSON.parse(sermon.youth_news) : []
+    } catch {
+      return []
+    }
+  })
+  const [sermonTitle, setSermonTitle] = useState(sermon.sermon_title || '')
+  const [sermonScripture, setSermonScripture] = useState(
+    sermon.sermon_scripture || ''
+  )
+  const [sermonPreacher, setSermonPreacher] = useState(
+    sermon.sermon_preacher || ''
+  )
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [message, setMessage] = useState('')
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   // 예배순서 항목 추가
   const addWorshipItem = () => {
@@ -40,7 +60,6 @@ export function SermonForm() {
   // 예배순서 항목 삭제
   const deleteWorshipItem = (id: string) => {
     const newItems = worshipItems.filter((item) => item.id !== id)
-    // order 재정렬
     const reorderedItems = newItems.map((item, index) => ({
       ...item,
       order: index + 1,
@@ -106,21 +125,37 @@ export function SermonForm() {
       formData.append('sermonScripture', sermonScripture)
       formData.append('sermonPreacher', sermonPreacher)
 
-      await createSermon(formData)
+      await updateSermon(sermon.id, formData)
 
-      setMessage('주보가 등록되었습니다!')
-      setDate('')
-      setWorshipItems([])
-      setNewsItems([])
-      setSermonTitle('')
-      setSermonScripture('')
-      setSermonPreacher('')
+      setMessage('주보가 수정되었습니다!')
+      setTimeout(() => {
+        router.push('/admin/sermons')
+      }, 1000)
     } catch (error) {
       setMessage(
         `오류: ${error instanceof Error ? error.message : '알 수 없는 오류'}`
       )
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!showDeleteConfirm) {
+      setShowDeleteConfirm(true)
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      await deleteSermon(sermon.id)
+      router.push('/admin/sermons')
+    } catch (error) {
+      setMessage(
+        `오류: ${error instanceof Error ? error.message : '알 수 없는 오류'}`
+      )
+      setIsSubmitting(false)
+      setShowDeleteConfirm(false)
     }
   }
 
@@ -337,13 +372,44 @@ export function SermonForm() {
         </div>
       )}
 
-      <button
-        type="submit"
-        disabled={isSubmitting}
-        className="w-full px-6 py-3 bg-blue-900 text-white rounded-lg hover:bg-blue-950 disabled:bg-gray-400 font-medium"
-      >
-        {isSubmitting ? '등록중...' : '주보 등록'}
-      </button>
+      <div className="flex gap-3">
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="flex-1 px-6 py-3 bg-blue-900 text-white rounded-lg hover:bg-blue-950 disabled:bg-gray-400 font-medium"
+        >
+          {isSubmitting ? '수정중...' : '주보 수정'}
+        </button>
+
+        {showDeleteConfirm ? (
+          <>
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={isSubmitting}
+              className="flex-1 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-400 font-medium"
+            >
+              {isSubmitting ? '삭제중...' : '삭제 확인'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowDeleteConfirm(false)}
+              disabled={isSubmitting}
+              className="flex-1 px-6 py-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600 disabled:bg-gray-400 font-medium"
+            >
+              취소
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setShowDeleteConfirm(true)}
+            className="flex-1 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium"
+          >
+            주보 삭제
+          </button>
+        )}
+      </div>
     </form>
   )
 }

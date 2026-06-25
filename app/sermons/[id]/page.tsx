@@ -4,12 +4,23 @@ import { getOrCreateUserNote } from '@/lib/actions/note-actions'
 import { NoteEditor } from '@/components/note-editor'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
+import { Header } from '@/components/header'
+import { Footer } from '@/components/footer'
 
 interface NewsItem {
   id: string
   title: string
   content: string
 }
+
+interface WorshipItem {
+  id: string
+  order: number
+  title: string
+  content: string
+}
+
+const ADMIN_EMAIL = 'user@test.com'
 
 type PageProps = {
   params: Promise<{ id: string }>
@@ -30,33 +41,35 @@ export default async function SermonDetailPage({ params }: PageProps) {
 
   const userNote = await getOrCreateUserNote(sermon.id)
 
+  const { isAdmin } = require('@/lib/auth')
+  const userIsAdmin = await isAdmin(user.id)
+
+  // 예배순서 파싱
+  let worshipItems: WorshipItem[] = []
+  if (sermon.worship_order) {
+    try {
+      worshipItems = JSON.parse(sermon.worship_order)
+    } catch {
+      // 파싱 실패
+    }
+  }
+
   // 청년부 소식 파싱
   let newsItems: NewsItem[] = []
   if (sermon.youth_news) {
     try {
       newsItems = JSON.parse(sermon.youth_news)
     } catch {
-      // 파싱 실패 시 텍스트로 표시
+      // 파싱 실패
     }
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* 헤더 */}
-      <header className="bg-white shadow">
-        <div className="max-w-4xl mx-auto px-4 py-4 flex justify-between items-center">
-          <Link href="/sermons" className="text-gray-600 hover:text-gray-900">
-            ← 돌아가기
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">반원중앙교회</h1>
-            <p className="text-gray-600 text-sm">청년부 설교 노트</p>
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      <Header isAdmin={userIsAdmin} />
 
       {/* 메인 컨텐츠 */}
-      <main className="max-w-4xl mx-auto px-4 py-8">
+      <main className="max-w-4xl mx-auto px-4 py-8 flex-1 w-full">
         {/* 주보 정보 */}
         <div className="bg-white rounded-lg shadow p-8 mb-8">
           <div className="text-sm text-gray-500 mb-6 font-semibold">
@@ -64,11 +77,29 @@ export default async function SermonDetailPage({ params }: PageProps) {
           </div>
 
           {/* 예배순서 */}
-          {sermon.worship_order && (
+          {worshipItems.length > 0 && (
             <div className="mb-8">
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">예배순서</h2>
-              <div className="bg-gray-50 p-4 rounded-lg whitespace-pre-wrap text-gray-700 font-mono text-sm">
-                {sermon.worship_order}
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">
+                예배순서
+              </h2>
+              <div className="space-y-3">
+                {worshipItems.map((item) => (
+                  <div key={item.id} className="flex gap-4">
+                    <div className="font-semibold text-gray-700 w-8">
+                      {item.order}.
+                    </div>
+                    <div>
+                      <p className="font-semibold text-gray-900">
+                        {item.title}
+                      </p>
+                      {item.content && (
+                        <p className="text-gray-600 text-sm">
+                          {item.content}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}
@@ -124,13 +155,33 @@ export default async function SermonDetailPage({ params }: PageProps) {
         </div>
 
         {/* 메모 영역 */}
-        <div className="bg-white rounded-lg shadow p-8">
+        <div className="bg-white rounded-lg shadow p-8 mb-8">
           <NoteEditor
             sermonId={sermon.id}
             initialContent={userNote?.content || ''}
           />
         </div>
+
+        {/* 하단 버튼 */}
+        <div className="flex gap-4">
+          <Link
+            href="/sermons"
+            className="flex-1 px-6 py-3 bg-blue-900 text-white rounded-lg hover:bg-blue-950 font-medium text-center"
+          >
+            ← 돌아가기
+          </Link>
+          {userIsAdmin && (
+            <Link
+              href={`/admin/sermons/${sermon.id}`}
+              className="flex-1 px-6 py-3 bg-blue-900 text-white rounded-lg hover:bg-blue-950 font-medium text-center"
+            >
+              수정
+            </Link>
+          )}
+        </div>
       </main>
+
+      <Footer />
     </div>
   )
 }
